@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:rive/rive.dart';
 
@@ -9,10 +11,14 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // Control para mostrar u ocultar la contraseña
+  // ==========================================
+  // CONTRASEÑA
+  // ==========================================
   bool _obscure = true;
 
-  // Cerebro de la animación
+  // ==========================================
+  // RIVE
+  // ==========================================
   StateMachineController? _controller;
 
   // Entradas de la máquina de estados
@@ -20,33 +26,64 @@ class _LoginScreenState extends State<LoginScreen> {
   SMIBool? _isHandsUp;
   SMITrigger? _trigSuccess;
   SMITrigger? _trigFail;
+  SMINumber? _numLook;
 
-  //2.1 Crear las variables para FocusNode
-  final _emailFocus = FocusNode();
-  final _passwordFocus = FocusNode();
+  // ==========================================
+  // TIMER PARA DETECTAR QUE DEJÓ DE ESCRIBIR
+  // ==========================================
+  Timer? _typingDebounce;
 
-  //2.2 Listeners (oyentes y chismosos)
+  // ==========================================
+  // FOCUS NODES
+  // ==========================================
+  final FocusNode _emailFocus = FocusNode();
+  final FocusNode _passwordFocus = FocusNode();
+
+  // ==========================================
+  // INIT STATE
+  // ==========================================
   @override
   void initState() {
     super.initState();
-    _emailFocus.addListener(() {
-      if (_emailFocus.hasFocus) {}
-      //verificar que no sea nulo
-      if (_isHandsUp != null) {
-        //manos abajo en el email
-        _isHandsUp!.change(false);
-      }
-    _passwordFocus.addListener((){
-      //manos arriba en password
-      _isHandsUp!.change(_passwordFocus.hasFocus);
 
+    // ------------------------------------------
+    // Cuando cambia el foco del EMAIL
+    // ------------------------------------------
+    _emailFocus.addListener(() {
+      if (_emailFocus.hasFocus) {
+        // El osito baja las manos
+        _isHandsUp?.change(false);
+
+        // Al entrar al email, comienza mirando al centro
+        _numLook?.value = 50.0;
+      }
     });
+
+    // ------------------------------------------
+    // Cuando cambia el foco de CONTRASEÑA
+    // ------------------------------------------
+    _passwordFocus.addListener(() {
+      if (_passwordFocus.hasFocus) {
+        // El osito se tapa los ojos
+        _isHandsUp?.change(true);
+
+        // Ya no está mirando el campo de email
+        _isChecking?.change(false);
+
+        // Regresar mirada al centro
+        _numLook?.value = 50.0;
+
+        // Cancelar cualquier timer pendiente
+        _typingDebounce?.cancel();
+      }
     });
   }
 
+  // ==========================================
+  // BUILD
+  // ==========================================
   @override
   Widget build(BuildContext context) {
-    // Para obtener el tamaño de la pantalla
     final Size size = MediaQuery.of(context).size;
 
     return Scaffold(
@@ -55,69 +92,185 @@ class _LoginScreenState extends State<LoginScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             children: [
-              // =========================
-              // ANIMACIÓN DEL OSITO
-              // =========================
+              // ==========================================
+              // OSITO
+              // ==========================================
               SizedBox(
                 width: size.width,
                 height: 200,
                 child: RiveAnimation.asset(
                   'assets/login-bear.riv',
 
-                  // Conectar la máquina de estados
                   onInit: (artboard) {
+                    // ------------------------------------
+                    // Crear controlador de la máquina
+                    // ------------------------------------
                     _controller = StateMachineController.fromArtboard(
                       artboard,
                       'Login Machine',
                     );
 
-                    // Verificar que el controlador se haya creado
-                    if (_controller == null) return;
+                    if (_controller == null) {
+                      debugPrint(
+                        'ERROR: No se encontró la máquina "Login Machine".',
+                      );
+                      return;
+                    }
 
-                    // Agregar el controlador al artboard
+                    // Agregar controlador al artboard
                     artboard.addController(_controller!);
 
-                    // Vincular las variables de la animación
+                    // ------------------------------------
+                    // OBTENER INPUTS DE RIVE
+                    // ------------------------------------
                     _isChecking =
-                        _controller!.findSMI('isChecking');
+                        _controller!.getBoolInput('isChecking');
 
                     _isHandsUp =
-                        _controller!.findSMI('isHandsUp');
+                        _controller!.getBoolInput('isHandsUp');
 
                     _trigSuccess =
-                        _controller!.findSMI('trigSuccess');
+                        _controller!.getTriggerInput('trigSuccess');
 
                     _trigFail =
-                        _controller!.findSMI('trigFail');
+                        _controller!.getTriggerInput('trigFail');
+
+                    _numLook =
+                        _controller!.getNumberInput('numLook');
+
+                    // ------------------------------------
+                    // DEBUG
+                    // ------------------------------------
+                    debugPrint('==============================');
+                    debugPrint('RIVE INICIALIZADO');
+                    debugPrint(
+                      'isChecking: ${_isChecking != null}',
+                    );
+                    debugPrint(
+                      'isHandsUp: ${_isHandsUp != null}',
+                    );
+                    debugPrint(
+                      'trigSuccess: ${_trigSuccess != null}',
+                    );
+                    debugPrint(
+                      'trigFail: ${_trigFail != null}',
+                    );
+                    debugPrint(
+                      'numLook: ${_numLook != null}',
+                    );
+
+                    if (_numLook != null) {
+                      debugPrint(
+                        'numLook inicial: ${_numLook!.value}',
+                      );
+
+                      // Mirada inicial al centro
+                      _numLook!.value = 50.0;
+                    }
+
+                    debugPrint('==============================');
                   },
                 ),
               ),
 
               const SizedBox(height: 10),
 
-              // =========================
-              // CAMPO DE EMAIL
-              // =========================
+              // ==========================================
+              // CAMPO EMAIL
+              // ==========================================
               TextField(
                 focusNode: _emailFocus,
-                onChanged: (value) {
-                  // Al escribir el email,
-                  // el osito NO se tapa los ojos
-                  if (_isHandsUp != null) {
-                    _isHandsUp!.change(false);
-                  }
 
-                  // El osito mira hacia el email
-                  if (_isChecking != null) {
-                   // _isChecking!.change(true);
-                  }
-                },
-
-                // Teclado para email
                 keyboardType: TextInputType.emailAddress,
+
+                onChanged: (value) {
+                  // --------------------------------------
+                  // 1. Bajar las manos
+                  // --------------------------------------
+                  _isHandsUp?.change(false);
+
+                  // --------------------------------------
+                  // 2. ACTIVAR EL ESTADO DE MIRAR
+                  // --------------------------------------
+                  _isChecking?.change(true);
+
+                  // --------------------------------------
+                  // 3. CALCULAR LA POSICIÓN DE LOS OJOS
+                  // --------------------------------------
+                  //
+                  // Rango de numLook:
+                  // 0   = extremo izquierdo
+                  // 50  = centro
+                  // 100 = extremo derecho
+                  //
+                  // Cada carácter mueve un poco la mirada.
+                  //
+                  final double look =
+                      (value.length * 5.0)
+                          .clamp(0.0, 100.0)
+                          .toDouble();
+
+                  // --------------------------------------
+                  // 4. ACTUALIZAR LOS OJOS
+                  // --------------------------------------
+                  if (_numLook != null) {
+                    _numLook!.value = look;
+
+                    debugPrint(
+                      'EMAIL: "$value"',
+                    );
+
+                    debugPrint(
+                      'CARACTERES: ${value.length}',
+                    );
+
+                    debugPrint(
+                      'numLook: ${_numLook!.value}',
+                    );
+                  } else {
+                    debugPrint(
+                      'ERROR: numLook es NULL',
+                    );
+                  }
+
+                  // --------------------------------------
+                  // 5. REINICIAR TIMER
+                  // --------------------------------------
+                  //
+                  // Cada vez que escribe o borra:
+                  // se cancela el timer anterior
+                  //
+                  _typingDebounce?.cancel();
+
+                  // --------------------------------------
+                  // 6. ESPERAR 3 SEGUNDOS
+                  // --------------------------------------
+                  _typingDebounce = Timer(
+                    const Duration(seconds: 3),
+                    () {
+                      if (!mounted) return;
+
+                      // Dejar de mirar el campo
+                      _isChecking?.change(false);
+
+                      // Regresar los ojos al centro
+                      _numLook?.value = 50.0;
+
+                      debugPrint(
+                        '3 segundos sin escribir -> '
+                        'isChecking = false',
+                      );
+
+                      debugPrint(
+                        'Mirada regresada a 50',
+                      );
+                    },
+                  );
+                },
 
                 decoration: InputDecoration(
                   hintText: 'Email',
+
                   prefixIcon: const Icon(Icons.email),
 
                   border: OutlineInputBorder(
@@ -128,37 +281,42 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 10),
 
-              // =========================
-              // CAMPO DE CONTRASEÑA
-              // =========================
+              // ==========================================
+              // CAMPO CONTRASEÑA
+              // ==========================================
               TextField(
                 focusNode: _passwordFocus,
-                // Ocultar o mostrar contraseña
+
                 obscureText: _obscure,
 
-                // Al escribir en contraseña
-                onChanged: (value) {
-                  // Si hay texto en la contraseña,
-                  // el osito se tapa los ojos
-                  if (_isHandsUp != null) {
-                    _isHandsUp!.change(value.isNotEmpty);
-                  }
-
-                  // Deja de mirar hacia el email
-                  if (_isChecking != null) {
-                   // _isChecking!.change(false);
-                  }
-                },
-
-                // Teclado para contraseña
                 keyboardType: TextInputType.text,
+
+                onChanged: (value) {
+                  // --------------------------------------
+                  // Si hay contraseña, cubrir ojos
+                  // --------------------------------------
+                  _isHandsUp?.change(value.isNotEmpty);
+
+                  // --------------------------------------
+                  // Ya no mirar el email
+                  // --------------------------------------
+                  _isChecking?.change(false);
+
+                  // --------------------------------------
+                  // Regresar mirada al centro
+                  // --------------------------------------
+                  _numLook?.value = 50.0;
+
+                  // Cancelar timer
+                  _typingDebounce?.cancel();
+                },
 
                 decoration: InputDecoration(
                   hintText: 'Contraseña',
 
                   prefixIcon: const Icon(Icons.lock),
 
-                  // Botón para mostrar/ocultar contraseña
+                  // Mostrar / ocultar contraseña
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscure
@@ -184,11 +342,17 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+
+  // ==========================================
+  // DISPOSE
+  // ==========================================
   @override
   void dispose() {
-    // 2.4 Liberar espacio en la memoria 
     _emailFocus.dispose();
     _passwordFocus.dispose();
+
+    _typingDebounce?.cancel();
+
     super.dispose();
   }
 }

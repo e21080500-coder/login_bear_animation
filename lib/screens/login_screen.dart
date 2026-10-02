@@ -14,11 +14,13 @@ class _LoginScreenState extends State<LoginScreen> {
   // ==========================================
   // CONTRASEÑA
   // ==========================================
+
   bool _obscure = true;
 
   // ==========================================
   // RIVE
   // ==========================================
+
   StateMachineController? _controller;
 
   // Entradas de la máquina de estados
@@ -31,17 +33,101 @@ class _LoginScreenState extends State<LoginScreen> {
   // ==========================================
   // TIMER PARA DETECTAR QUE DEJÓ DE ESCRIBIR
   // ==========================================
+
   Timer? _typingDebounce;
 
   // ==========================================
   // FOCUS NODES
   // ==========================================
+
   final FocusNode _emailFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
 
   // ==========================================
+  // CONTROLLERS
+  // ==========================================
+
+  final TextEditingController _emailCtrl = TextEditingController();
+  final TextEditingController _passwordCtrl = TextEditingController();
+
+  // ==========================================
+  // ERRORES
+  // ==========================================
+
+  String? _emailError;
+  String? _passwordError;
+
+  // ==========================================
+  // VALIDADORES
+  // ==========================================
+
+  bool isValidEmail(String email) {
+    final re = RegExp(
+      r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+    );
+
+    return re.hasMatch(email);
+  }
+
+  // La contraseña necesita:
+  // - Mínimo 8 caracteres
+  // - Al menos una letra
+  // - Al menos un número
+  // - Al menos un carácter especial
+  //
+  // NO necesita mayúscula obligatoriamente.
+  //
+  // Ejemplo válido: jasj@.2828
+  bool isValidPassword(String password) {
+    final re = RegExp(
+      r'^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$',
+    );
+
+    return re.hasMatch(password);
+  }
+
+  // ==========================================
+  // ACCIÓN DEL BOTÓN LOGIN
+  // ==========================================
+
+  void _onLogin() {
+    final email = _emailCtrl.text.trim();
+    final password = _passwordCtrl.text.trim();
+
+    final String? eError =
+        isValidEmail(email) ? null : 'Invalid Email';
+
+    final String? pError =
+        isValidPassword(password) ? null : 'Invalid Password';
+
+    setState(() {
+      _emailError = eError;
+      _passwordError = pError;
+    });
+
+    // Cerrar teclado
+    FocusScope.of(context).unfocus();
+
+    // Cancelar timer
+    _typingDebounce?.cancel();
+
+    // Regresar oso a posición normal
+    _isChecking?.change(false);
+    _isHandsUp?.change(false);
+    _numLook?.value = 50.0;
+
+    // Activar animación correspondiente
+    if (eError == null && pError == null) {
+      _trigSuccess?.fire();
+    } else {
+      _trigFail?.fire();
+    }
+  }
+
+  // ==========================================
   // INIT STATE
   // ==========================================
+
   @override
   void initState() {
     super.initState();
@@ -49,12 +135,13 @@ class _LoginScreenState extends State<LoginScreen> {
     // ------------------------------------------
     // Cuando cambia el foco del EMAIL
     // ------------------------------------------
+
     _emailFocus.addListener(() {
       if (_emailFocus.hasFocus) {
         // El osito baja las manos
         _isHandsUp?.change(false);
 
-        // Al entrar al email, comienza mirando al centro
+        // Mirada inicial al centro
         _numLook?.value = 50.0;
       }
     });
@@ -62,18 +149,19 @@ class _LoginScreenState extends State<LoginScreen> {
     // ------------------------------------------
     // Cuando cambia el foco de CONTRASEÑA
     // ------------------------------------------
+
     _passwordFocus.addListener(() {
       if (_passwordFocus.hasFocus) {
         // El osito se tapa los ojos
         _isHandsUp?.change(true);
 
-        // Ya no está mirando el campo de email
+        // Ya no mira el email
         _isChecking?.change(false);
 
         // Regresar mirada al centro
         _numLook?.value = 50.0;
 
-        // Cancelar cualquier timer pendiente
+        // Cancelar timer pendiente
         _typingDebounce?.cancel();
       }
     });
@@ -82,261 +170,338 @@ class _LoginScreenState extends State<LoginScreen> {
   // ==========================================
   // BUILD
   // ==========================================
+
   @override
   Widget build(BuildContext context) {
     final Size size = MediaQuery.of(context).size;
 
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            children: [
-              // ==========================================
-              // OSITO
-              // ==========================================
-              SizedBox(
-                width: size.width,
-                height: 200,
-                child: RiveAnimation.asset(
-                  'assets/login-bear.riv',
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              children: [
+                // ==========================================
+                // OSITO
+                // ==========================================
 
-                  onInit: (artboard) {
-                    // ------------------------------------
-                    // Crear controlador de la máquina
-                    // ------------------------------------
-                    _controller = StateMachineController.fromArtboard(
-                      artboard,
-                      'Login Machine',
-                    );
-
-                    if (_controller == null) {
-                      debugPrint(
-                        'ERROR: No se encontró la máquina "Login Machine".',
-                      );
-                      return;
-                    }
-
-                    // Agregar controlador al artboard
-                    artboard.addController(_controller!);
-
-                    // ------------------------------------
-                    // OBTENER INPUTS DE RIVE
-                    // ------------------------------------
-                    _isChecking =
-                        _controller!.getBoolInput('isChecking');
-
-                    _isHandsUp =
-                        _controller!.getBoolInput('isHandsUp');
-
-                    _trigSuccess =
-                        _controller!.getTriggerInput('trigSuccess');
-
-                    _trigFail =
-                        _controller!.getTriggerInput('trigFail');
-
-                    _numLook =
-                        _controller!.getNumberInput('numLook');
-
-                    // ------------------------------------
-                    // DEBUG
-                    // ------------------------------------
-                    debugPrint('==============================');
-                    debugPrint('RIVE INICIALIZADO');
-                    debugPrint(
-                      'isChecking: ${_isChecking != null}',
-                    );
-                    debugPrint(
-                      'isHandsUp: ${_isHandsUp != null}',
-                    );
-                    debugPrint(
-                      'trigSuccess: ${_trigSuccess != null}',
-                    );
-                    debugPrint(
-                      'trigFail: ${_trigFail != null}',
-                    );
-                    debugPrint(
-                      'numLook: ${_numLook != null}',
-                    );
-
-                    if (_numLook != null) {
-                      debugPrint(
-                        'numLook inicial: ${_numLook!.value}',
+                SizedBox(
+                  width: size.width,
+                  height: 200,
+                  child: RiveAnimation.asset(
+                    'assets/login-bear.riv',
+                    onInit: (artboard) {
+                      // Crear controlador de la máquina
+                      _controller =
+                          StateMachineController.fromArtboard(
+                        artboard,
+                        'Login Machine',
                       );
 
-                      // Mirada inicial al centro
-                      _numLook!.value = 50.0;
-                    }
+                      if (_controller == null) {
+                        debugPrint(
+                          'ERROR: No se encontró la máquina "Login Machine".',
+                        );
+                        return;
+                      }
 
-                    debugPrint('==============================');
-                  },
-                ),
-              ),
+                      // Agregar controlador
+                      artboard.addController(_controller!);
 
-              const SizedBox(height: 10),
+                      // Obtener inputs
+                      _isChecking =
+                          _controller!.getBoolInput('isChecking');
 
-              // ==========================================
-              // CAMPO EMAIL
-              // ==========================================
-              TextField(
-                focusNode: _emailFocus,
+                      _isHandsUp =
+                          _controller!.getBoolInput('isHandsUp');
 
-                keyboardType: TextInputType.emailAddress,
+                      _trigSuccess =
+                          _controller!.getTriggerInput('trigSuccess');
 
-                onChanged: (value) {
-                  // --------------------------------------
-                  // 1. Bajar las manos
-                  // --------------------------------------
-                  _isHandsUp?.change(false);
+                      _trigFail =
+                          _controller!.getTriggerInput('trigFail');
 
-                  // --------------------------------------
-                  // 2. ACTIVAR EL ESTADO DE MIRAR
-                  // --------------------------------------
-                  _isChecking?.change(true);
+                      _numLook =
+                          _controller!.getNumberInput('numLook');
 
-                  // --------------------------------------
-                  // 3. CALCULAR LA POSICIÓN DE LOS OJOS
-                  // --------------------------------------
-                  //
-                  // Rango de numLook:
-                  // 0   = extremo izquierdo
-                  // 50  = centro
-                  // 100 = extremo derecho
-                  //
-                  // Cada carácter mueve un poco la mirada.
-                  //
-                  final double look =
-                      (value.length * 5.0)
-                          .clamp(0.0, 100.0)
-                          .toDouble();
-
-                  // --------------------------------------
-                  // 4. ACTUALIZAR LOS OJOS
-                  // --------------------------------------
-                  if (_numLook != null) {
-                    _numLook!.value = look;
-
-                    debugPrint(
-                      'EMAIL: "$value"',
-                    );
-
-                    debugPrint(
-                      'CARACTERES: ${value.length}',
-                    );
-
-                    debugPrint(
-                      'numLook: ${_numLook!.value}',
-                    );
-                  } else {
-                    debugPrint(
-                      'ERROR: numLook es NULL',
-                    );
-                  }
-
-                  // --------------------------------------
-                  // 5. REINICIAR TIMER
-                  // --------------------------------------
-                  //
-                  // Cada vez que escribe o borra:
-                  // se cancela el timer anterior
-                  //
-                  _typingDebounce?.cancel();
-
-                  // --------------------------------------
-                  // 6. ESPERAR 3 SEGUNDOS
-                  // --------------------------------------
-                  _typingDebounce = Timer(
-                    const Duration(seconds: 3),
-                    () {
-                      if (!mounted) return;
-
-                      // Dejar de mirar el campo
-                      _isChecking?.change(false);
-
-                      // Regresar los ojos al centro
-                      _numLook?.value = 50.0;
+                      // DEBUG
+                      debugPrint('==============================');
+                      debugPrint('RIVE INICIALIZADO');
 
                       debugPrint(
-                        '3 segundos sin escribir -> '
-                        'isChecking = false',
+                        'isChecking: ${_isChecking != null}',
                       );
 
                       debugPrint(
-                        'Mirada regresada a 50',
+                        'isHandsUp: ${_isHandsUp != null}',
                       );
+
+                      debugPrint(
+                        'trigSuccess: ${_trigSuccess != null}',
+                      );
+
+                      debugPrint(
+                        'trigFail: ${_trigFail != null}',
+                      );
+
+                      debugPrint(
+                        'numLook: ${_numLook != null}',
+                      );
+
+                      if (_numLook != null) {
+                        debugPrint(
+                          'numLook inicial: ${_numLook!.value}',
+                        );
+
+                        // Mirada inicial al centro
+                        _numLook!.value = 50.0;
+                      }
+
+                      debugPrint('==============================');
                     },
-                  );
-                },
-
-                decoration: InputDecoration(
-                  hintText: 'Email',
-
-                  prefixIcon: const Icon(Icons.email),
-
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-              ),
 
-              const SizedBox(height: 10),
+                const SizedBox(height: 10),
 
-              // ==========================================
-              // CAMPO CONTRASEÑA
-              // ==========================================
-              TextField(
-                focusNode: _passwordFocus,
+                // ==========================================
+                // CAMPO EMAIL
+                // ==========================================
 
-                obscureText: _obscure,
+                TextField(
+                  controller: _emailCtrl,
+                  focusNode: _emailFocus,
+                  keyboardType: TextInputType.emailAddress,
 
-                keyboardType: TextInputType.text,
+                  onChanged: (value) {
+                    // Quitar error mientras vuelve a escribir
+                    if (_emailError != null) {
+                      setState(() {
+                        _emailError = null;
+                      });
+                    }
 
-                onChanged: (value) {
-                  // --------------------------------------
-                  // Si hay contraseña, cubrir ojos
-                  // --------------------------------------
-                  _isHandsUp?.change(value.isNotEmpty);
+                    // Bajar las manos
+                    _isHandsUp?.change(false);
 
-                  // --------------------------------------
-                  // Ya no mirar el email
-                  // --------------------------------------
-                  _isChecking?.change(false);
+                    // Activar estado de mirar
+                    _isChecking?.change(true);
 
-                  // --------------------------------------
-                  // Regresar mirada al centro
-                  // --------------------------------------
-                  _numLook?.value = 50.0;
+                    // Calcular posición de los ojos
+                    final double look =
+                        (value.length * 5.0)
+                            .clamp(0.0, 100.0)
+                            .toDouble();
 
-                  // Cancelar timer
-                  _typingDebounce?.cancel();
-                },
+                    // Actualizar los ojos
+                    if (_numLook != null) {
+                      _numLook!.value = look;
 
-                decoration: InputDecoration(
-                  hintText: 'Contraseña',
+                      debugPrint(
+                        'EMAIL: "$value"',
+                      );
 
-                  prefixIcon: const Icon(Icons.lock),
+                      debugPrint(
+                        'CARACTERES: ${value.length}',
+                      );
 
-                  // Mostrar / ocultar contraseña
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscure
-                          ? Icons.visibility
-                          : Icons.visibility_off,
+                      debugPrint(
+                        'numLook: ${_numLook!.value}',
+                      );
+                    } else {
+                      debugPrint(
+                        'ERROR: numLook es NULL',
+                      );
+                    }
+
+                    // Reiniciar timer
+                    _typingDebounce?.cancel();
+
+                    // Esperar 3 segundos
+                    _typingDebounce = Timer(
+                      const Duration(seconds: 3),
+                      () {
+                        if (!mounted) return;
+
+                        // Dejar de mirar el campo
+                        _isChecking?.change(false);
+
+                        // Regresar ojos al centro
+                        _numLook?.value = 50.0;
+
+                        debugPrint(
+                          '3 segundos sin escribir -> '
+                          'isChecking = false',
+                        );
+
+                        debugPrint(
+                          'Mirada regresada a 50',
+                        );
+                      },
+                    );
+                  },
+
+                  decoration: InputDecoration(
+                    errorText: _emailError,
+                    hintText: 'Email',
+                    prefixIcon: const Icon(
+                      Icons.email,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius:
+                          BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // ==========================================
+                // CAMPO CONTRASEÑA
+                // ==========================================
+
+                TextField(
+                  controller: _passwordCtrl,
+                  focusNode: _passwordFocus,
+                  obscureText: _obscure,
+                  keyboardType: TextInputType.text,
+
+                  onChanged: (value) {
+                    // Quitar el mensaje de error
+                    // cuando vuelva a escribir
+                    if (_passwordError != null) {
+                      setState(() {
+                        _passwordError = null;
+                      });
+                    }
+
+                    // Si hay contraseña, cubrir ojos
+                    _isHandsUp?.change(value.isNotEmpty);
+
+                    // Ya no mirar el email
+                    _isChecking?.change(false);
+
+                    // Regresar mirada al centro
+                    _numLook?.value = 50.0;
+
+                    // Cancelar timer
+                    _typingDebounce?.cancel();
+                  },
+
+                  decoration: InputDecoration(
+                    errorText: _passwordError,
+                    hintText: 'Password',
+
+                    prefixIcon: const Icon(
+                      Icons.lock,
                     ),
 
-                    onPressed: () {
-                      setState(() {
-                        _obscure = !_obscure;
-                      });
-                    },
-                  ),
+                    // Mostrar / ocultar contraseña
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscure
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscure = !_obscure;
+                        });
+                      },
+                    ),
 
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    border: OutlineInputBorder(
+                      borderRadius:
+                          BorderRadius.circular(12),
+                    ),
                   ),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 10),
+
+                // ==========================================
+                // OLVIDÉ LA CONTRASEÑA
+                // ==========================================
+
+                SizedBox(
+                  width: size.width,
+                  child: const Text(
+                    'forgot password?',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      decoration:
+                          TextDecoration.underline,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // ==========================================
+                // BOTÓN LOGIN
+                // ==========================================
+
+                MaterialButton(
+                  minWidth: size.width,
+                  height: 50,
+                  color: Colors.pinkAccent,
+
+                  shape: RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.circular(12),
+                  ),
+
+                  onPressed: _onLogin,
+
+                  child: const Text(
+                    'Login',
+                    style: TextStyle(
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // ==========================================
+                // SIGN UP
+                // ==========================================
+
+                SizedBox(
+                  width: size.width,
+                  child: Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment.center,
+
+                    children: [
+                      const Text(
+                        "Don't have an account?",
+                      ),
+
+                      TextButton(
+                        onPressed: () {
+                          // Acción para registrarse
+                        },
+
+                        child: const Text(
+                          'Sign Up',
+                          style: TextStyle(
+                            color: Colors.black,
+                            decoration:
+                                TextDecoration.underline,
+                            fontWeight:
+                                FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         ),
       ),
@@ -346,12 +511,16 @@ class _LoginScreenState extends State<LoginScreen> {
   // ==========================================
   // DISPOSE
   // ==========================================
+
   @override
   void dispose() {
+    _typingDebounce?.cancel();
+
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+
     _emailFocus.dispose();
     _passwordFocus.dispose();
-
-    _typingDebounce?.cancel();
 
     super.dispose();
   }

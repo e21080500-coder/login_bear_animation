@@ -1,3 +1,4 @@
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -10,7 +11,9 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
+
   // ==========================================
   // CONTRASEÑA
   // ==========================================
@@ -18,12 +21,23 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscure = true;
 
   // ==========================================
-  // RIVE
+  // REMEMBER ME
+  // ==========================================
+
+  bool _rememberMe = false;
+
+  // Bandera para evitar pulsaciones repetidas
+  bool _isRememberAnimating = false;
+
+  // Controlador de la animación del interruptor
+  late final AnimationController _rememberController;
+
+  // ==========================================
+  // RIVE - OSITO ANIMADO
   // ==========================================
 
   StateMachineController? _controller;
 
-  // Entradas de la máquina de estados
   SMIBool? _isChecking;
   SMIBool? _isHandsUp;
   SMITrigger? _trigSuccess;
@@ -31,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
   SMINumber? _numLook;
 
   // ==========================================
-  // TIMER PARA DETECTAR QUE DEJÓ DE ESCRIBIR
+  // TIMER
   // ==========================================
 
   Timer? _typingDebounce;
@@ -47,8 +61,11 @@ class _LoginScreenState extends State<LoginScreen> {
   // CONTROLLERS
   // ==========================================
 
-  final TextEditingController _emailCtrl = TextEditingController();
-  final TextEditingController _passwordCtrl = TextEditingController();
+  final TextEditingController _emailCtrl =
+      TextEditingController();
+
+  final TextEditingController _passwordCtrl =
+      TextEditingController();
 
   // ==========================================
   // ERRORES
@@ -69,15 +86,10 @@ class _LoginScreenState extends State<LoginScreen> {
     return re.hasMatch(email);
   }
 
-  // La contraseña necesita:
-  // - Mínimo 8 caracteres
-  // - Al menos una letra
-  // - Al menos un número
-  // - Al menos un carácter especial
-  //
-  // NO necesita mayúscula obligatoriamente.
-  //
+  // Mínimo 8 caracteres, una letra,
+  // un número y un símbolo.
   // Ejemplo válido: jasj@.2828
+
   bool isValidPassword(String password) {
     final re = RegExp(
       r'^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$',
@@ -87,36 +99,92 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ==========================================
-  // ACCIÓN DEL BOTÓN LOGIN
+  // REMEMBER ME - CONTROL ANTI-SPAM
+  // ==========================================
+
+  void _toggleRememberMe() {
+
+    // Si la animación está ejecutándose,
+    // ignoramos cualquier nuevo toque.
+    if (_isRememberAnimating) {
+      return;
+    }
+
+    setState(() {
+      _isRememberAnimating = true;
+      _rememberMe = !_rememberMe;
+    });
+
+    // Iniciar animación según el estado.
+    if (_rememberMe) {
+      _rememberController.forward();
+    } else {
+      _rememberController.reverse();
+    }
+  }
+
+  // Escucha exactamente cuándo termina
+  // la animación del interruptor.
+  void _onRememberAnimationStatus(
+    AnimationStatus status,
+  ) {
+
+    if (status == AnimationStatus.completed ||
+        status == AnimationStatus.dismissed) {
+
+      if (!mounted) return;
+
+      setState(() {
+        // Se vuelve a permitir la interacción.
+        _isRememberAnimating = false;
+      });
+
+      debugPrint(
+        'Remember me: $_rememberMe',
+      );
+
+      debugPrint(
+        'Animación terminada. Toques habilitados.',
+      );
+    }
+  }
+
+  // ==========================================
+  // BOTÓN LOGIN
   // ==========================================
 
   void _onLogin() {
+
     final email = _emailCtrl.text.trim();
     final password = _passwordCtrl.text.trim();
 
     final String? eError =
-        isValidEmail(email) ? null : 'Invalid Email';
+        isValidEmail(email)
+            ? null
+            : 'Invalid Email';
 
     final String? pError =
-        isValidPassword(password) ? null : 'Invalid Password';
+        isValidPassword(password)
+            ? null
+            : 'Invalid Password';
 
     setState(() {
       _emailError = eError;
       _passwordError = pError;
     });
 
-    // Cerrar teclado
+    // Cerrar el teclado
     FocusScope.of(context).unfocus();
 
     // Cancelar timer
     _typingDebounce?.cancel();
 
-    // Regresar oso a posición normal
+    // Reiniciar posición del oso
     _isChecking?.change(false);
     _isHandsUp?.change(false);
     _numLook?.value = 50.0;
 
-    // Activar animación correspondiente
+    // Animación de resultado
     if (eError == null && pError == null) {
       _trigSuccess?.fire();
     } else {
@@ -132,39 +200,159 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
 
-    // ------------------------------------------
-    // Cuando cambia el foco del EMAIL
-    // ------------------------------------------
+    // ==========================================
+    // CONTROLADOR DE REMEMBER ME
+    // ==========================================
+
+    _rememberController = AnimationController(
+      vsync: this,
+      duration: const Duration(
+        milliseconds: 350,
+      ),
+    );
+
+    // Detectar cuándo termina la animación.
+    _rememberController.addStatusListener(
+      _onRememberAnimationStatus,
+    );
+
+    // ==========================================
+    // FOCO DEL EMAIL
+    // ==========================================
 
     _emailFocus.addListener(() {
       if (_emailFocus.hasFocus) {
-        // El osito baja las manos
+
+        // El oso baja las manos.
         _isHandsUp?.change(false);
 
-        // Mirada inicial al centro
+        // Mirada al centro.
         _numLook?.value = 50.0;
       }
     });
 
-    // ------------------------------------------
-    // Cuando cambia el foco de CONTRASEÑA
-    // ------------------------------------------
+    // ==========================================
+    // FOCO DE LA CONTRASEÑA
+    // ==========================================
 
     _passwordFocus.addListener(() {
       if (_passwordFocus.hasFocus) {
-        // El osito se tapa los ojos
+
+        // El oso se tapa los ojos.
         _isHandsUp?.change(true);
 
-        // Ya no mira el email
+        // Deja de mirar el correo.
         _isChecking?.change(false);
 
-        // Regresar mirada al centro
+        // Regresa al centro.
         _numLook?.value = 50.0;
 
-        // Cancelar timer pendiente
         _typingDebounce?.cancel();
       }
     });
+  }
+
+  // ==========================================
+  // WIDGET REMEMBER ME
+  // ==========================================
+
+  Widget _buildRememberMe() {
+
+    return Semantics(
+      label: 'Remember me',
+      button: true,
+      toggled: _rememberMe,
+      enabled: !_isRememberAnimating,
+
+      child: GestureDetector(
+
+        // ANTI-SPAM:
+        // Si está animándose, no acepta toques.
+        onTap: _isRememberAnimating
+            ? null
+            : _toggleRememberMe,
+
+        behavior: HitTestBehavior.opaque,
+
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            vertical: 6,
+          ),
+
+          child: Row(
+            children: [
+
+              // INTERRUPTOR ANIMADO
+              AnimatedBuilder(
+                animation: _rememberController,
+
+                builder: (context, child) {
+
+                  final double progress =
+                      Curves.easeInOut.transform(
+                    _rememberController.value,
+                  );
+
+                  return Container(
+                    width: 58,
+                    height: 34,
+
+                    padding: const EdgeInsets.all(4),
+
+                    decoration: BoxDecoration(
+
+                      // Gris cuando está desactivado.
+                      // Rosa cuando está activado.
+                      color: Color.lerp(
+                        Colors.grey.shade400,
+                        Colors.pinkAccent,
+                        progress,
+                      ),
+
+                      borderRadius:
+                          BorderRadius.circular(30),
+                    ),
+
+                    child: Align(
+
+                      // Movimiento del círculo
+                      // de izquierda a derecha.
+                      alignment: Alignment.lerp(
+                        Alignment.centerLeft,
+                        Alignment.centerRight,
+                        progress,
+                      )!,
+
+                      child: Container(
+                        width: 26,
+                        height: 26,
+
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(width: 12),
+
+              // TEXTO
+              const Text(
+                'Remember me',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // ==========================================
@@ -173,171 +361,141 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final Size size = MediaQuery.of(context).size;
+
+    final Size size =
+        MediaQuery.of(context).size;
 
     return Scaffold(
+
       body: SafeArea(
+
         child: SingleChildScrollView(
+
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 20,
+            ),
+
             child: Column(
               children: [
-                // ==========================================
-                // OSITO
-                // ==========================================
+
+                // ==================================
+                // OSITO ANIMADO
+                // ==================================
 
                 SizedBox(
                   width: size.width,
                   height: 200,
+
                   child: RiveAnimation.asset(
                     'assets/login-bear.riv',
+
                     onInit: (artboard) {
-                      // Crear controlador de la máquina
+
                       _controller =
-                          StateMachineController.fromArtboard(
+                          StateMachineController
+                              .fromArtboard(
                         artboard,
                         'Login Machine',
                       );
 
                       if (_controller == null) {
+
                         debugPrint(
-                          'ERROR: No se encontró la máquina "Login Machine".',
+                          'ERROR: No se encontró Login Machine',
                         );
+
                         return;
                       }
 
-                      // Agregar controlador
-                      artboard.addController(_controller!);
+                      artboard.addController(
+                        _controller!,
+                      );
 
-                      // Obtener inputs
                       _isChecking =
-                          _controller!.getBoolInput('isChecking');
+                          _controller!.getBoolInput(
+                        'isChecking',
+                      );
 
                       _isHandsUp =
-                          _controller!.getBoolInput('isHandsUp');
+                          _controller!.getBoolInput(
+                        'isHandsUp',
+                      );
 
                       _trigSuccess =
-                          _controller!.getTriggerInput('trigSuccess');
+                          _controller!.getTriggerInput(
+                        'trigSuccess',
+                      );
 
                       _trigFail =
-                          _controller!.getTriggerInput('trigFail');
+                          _controller!.getTriggerInput(
+                        'trigFail',
+                      );
 
                       _numLook =
-                          _controller!.getNumberInput('numLook');
-
-                      // DEBUG
-                      debugPrint('==============================');
-                      debugPrint('RIVE INICIALIZADO');
-
-                      debugPrint(
-                        'isChecking: ${_isChecking != null}',
+                          _controller!.getNumberInput(
+                        'numLook',
                       );
 
-                      debugPrint(
-                        'isHandsUp: ${_isHandsUp != null}',
-                      );
+                      _numLook?.value = 50.0;
 
                       debugPrint(
-                        'trigSuccess: ${_trigSuccess != null}',
+                        'RIVE INICIALIZADO',
                       );
-
-                      debugPrint(
-                        'trigFail: ${_trigFail != null}',
-                      );
-
-                      debugPrint(
-                        'numLook: ${_numLook != null}',
-                      );
-
-                      if (_numLook != null) {
-                        debugPrint(
-                          'numLook inicial: ${_numLook!.value}',
-                        );
-
-                        // Mirada inicial al centro
-                        _numLook!.value = 50.0;
-                      }
-
-                      debugPrint('==============================');
                     },
                   ),
                 ),
 
                 const SizedBox(height: 10),
 
-                // ==========================================
-                // CAMPO EMAIL
-                // ==========================================
+                // ==================================
+                // EMAIL
+                // ==================================
 
                 TextField(
                   controller: _emailCtrl,
                   focusNode: _emailFocus,
-                  keyboardType: TextInputType.emailAddress,
+
+                  keyboardType:
+                      TextInputType.emailAddress,
 
                   onChanged: (value) {
-                    // Quitar error mientras vuelve a escribir
+
                     if (_emailError != null) {
                       setState(() {
                         _emailError = null;
                       });
                     }
 
-                    // Bajar las manos
+                    // Bajar manos
                     _isHandsUp?.change(false);
 
-                    // Activar estado de mirar
+                    // Oso mira el email
                     _isChecking?.change(true);
 
-                    // Calcular posición de los ojos
                     final double look =
                         (value.length * 5.0)
                             .clamp(0.0, 100.0)
                             .toDouble();
 
-                    // Actualizar los ojos
                     if (_numLook != null) {
                       _numLook!.value = look;
-
-                      debugPrint(
-                        'EMAIL: "$value"',
-                      );
-
-                      debugPrint(
-                        'CARACTERES: ${value.length}',
-                      );
-
-                      debugPrint(
-                        'numLook: ${_numLook!.value}',
-                      );
-                    } else {
-                      debugPrint(
-                        'ERROR: numLook es NULL',
-                      );
                     }
 
-                    // Reiniciar timer
                     _typingDebounce?.cancel();
 
-                    // Esperar 3 segundos
+                    // Después de 3 segundos
+                    // sin escribir, el oso deja
+                    // de mirar el email.
                     _typingDebounce = Timer(
                       const Duration(seconds: 3),
                       () {
+
                         if (!mounted) return;
 
-                        // Dejar de mirar el campo
                         _isChecking?.change(false);
 
-                        // Regresar ojos al centro
                         _numLook?.value = 50.0;
-
-                        debugPrint(
-                          '3 segundos sin escribir -> '
-                          'isChecking = false',
-                        );
-
-                        debugPrint(
-                          'Mirada regresada a 50',
-                        );
                       },
                     );
                   },
@@ -345,9 +503,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: InputDecoration(
                     errorText: _emailError,
                     hintText: 'Email',
+
                     prefixIcon: const Icon(
                       Icons.email,
                     ),
+
                     border: OutlineInputBorder(
                       borderRadius:
                           BorderRadius.circular(12),
@@ -357,35 +517,36 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 10),
 
-                // ==========================================
-                // CAMPO CONTRASEÑA
-                // ==========================================
+                // ==================================
+                // PASSWORD
+                // ==================================
 
                 TextField(
                   controller: _passwordCtrl,
                   focusNode: _passwordFocus,
+
                   obscureText: _obscure,
+
                   keyboardType: TextInputType.text,
 
                   onChanged: (value) {
-                    // Quitar el mensaje de error
-                    // cuando vuelva a escribir
+
                     if (_passwordError != null) {
+
                       setState(() {
                         _passwordError = null;
                       });
                     }
 
-                    // Si hay contraseña, cubrir ojos
-                    _isHandsUp?.change(value.isNotEmpty);
+                    // El oso se tapa los ojos.
+                    _isHandsUp?.change(
+                      value.isNotEmpty,
+                    );
 
-                    // Ya no mirar el email
                     _isChecking?.change(false);
 
-                    // Regresar mirada al centro
                     _numLook?.value = 50.0;
 
-                    // Cancelar timer
                     _typingDebounce?.cancel();
                   },
 
@@ -397,14 +558,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       Icons.lock,
                     ),
 
-                    // Mostrar / ocultar contraseña
+                    // Mostrar y ocultar contraseña
                     suffixIcon: IconButton(
+
                       icon: Icon(
                         _obscure
                             ? Icons.visibility
                             : Icons.visibility_off,
                       ),
+
                       onPressed: () {
+
                         setState(() {
                           _obscure = !_obscure;
                         });
@@ -420,15 +584,26 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 10),
 
-                // ==========================================
-                // OLVIDÉ LA CONTRASEÑA
-                // ==========================================
+                // ==================================
+                // REMEMBER ME - NUEVA FUNCIÓN
+                // ==================================
+
+                _buildRememberMe(),
+
+                const SizedBox(height: 10),
+
+                // ==================================
+                // FORGOT PASSWORD
+                // ==================================
 
                 SizedBox(
                   width: size.width,
+
                   child: const Text(
                     'forgot password?',
+
                     textAlign: TextAlign.right,
+
                     style: TextStyle(
                       decoration:
                           TextDecoration.underline,
@@ -438,13 +613,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 10),
 
-                // ==========================================
+                // ==================================
                 // BOTÓN LOGIN
-                // ==========================================
+                // ==================================
 
                 MaterialButton(
                   minWidth: size.width,
                   height: 50,
+
                   color: Colors.pinkAccent,
 
                   shape: RoundedRectangleBorder(
@@ -456,6 +632,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   child: const Text(
                     'Login',
+
                     style: TextStyle(
                       color: Colors.white,
                     ),
@@ -464,17 +641,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 10),
 
-                // ==========================================
+                // ==================================
                 // SIGN UP
-                // ==========================================
+                // ==================================
 
                 SizedBox(
                   width: size.width,
+
                   child: Row(
                     mainAxisAlignment:
                         MainAxisAlignment.center,
 
                     children: [
+
                       const Text(
                         "Don't have an account?",
                       ),
@@ -486,10 +665,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         child: const Text(
                           'Sign Up',
+
                           style: TextStyle(
                             color: Colors.black,
+
                             decoration:
                                 TextDecoration.underline,
+
                             fontWeight:
                                 FontWeight.bold,
                           ),
@@ -500,6 +682,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
 
                 const SizedBox(height: 20),
+
               ],
             ),
           ),
@@ -514,7 +697,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+
     _typingDebounce?.cancel();
+
+    // Liberar controlador de animación
+    _rememberController.removeStatusListener(
+      _onRememberAnimationStatus,
+    );
+
+    _rememberController.dispose();
 
     _emailCtrl.dispose();
     _passwordCtrl.dispose();

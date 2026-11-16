@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "455530620241",
+    "project_id": "rive-animated-login",
+    "storage_bucket": "rive-animated-login.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:455530620241:android:cab01ad21ea942b2179f70",
+        "android_client_info": {
+          "package_name": "com.example.login_bear_animation"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD3ipMqn7jaBN1NcGV5-qxDYzAw0EZNSho"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
